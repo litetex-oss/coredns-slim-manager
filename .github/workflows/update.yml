@@ -55,7 +55,7 @@ jobs:
           git commit -a -m "Deleted owners generation script"
 
           sed -i "/geoip\|grpc_server\|chaos\|route53\|azure\|clouddns\|k8s_external\|kubernetes\|etcd\|grpc\|nomad/d" plugin.cfg
-          rm -rf plugin/{azure,grpc_server,chaos,route53,azure,clouddns,k8s_external,kubernetes,etcd,grpc,nomad}
+          rm -rf plugin/{geoip,grpc_server,chaos,route53,azure,clouddns,k8s_external,kubernetes,etcd,grpc,nomad}
           git commit -a -m "Deleted unused plugins"
 
           rm -rf pb
