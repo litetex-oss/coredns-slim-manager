@@ -1,0 +1,235 @@
+diff --git a/core/dnsserver/register.go b/core/dnsserver/register.go
+index 9aa95e4ea..036dbbb2d 100644
+--- a/core/dnsserver/register.go
++++ b/core/dnsserver/register.go
+@@ -336,13 +336,6 @@ func makeServersForGroup(addr string, group []*Config) ([]caddy.Server, error) {
+ 			}
+ 			servers = append(servers, s)
+ 
+-		case transport.GRPC:
+-			s, err := NewServergRPC(addr, group)
+-			if err != nil {
+-				return nil, err
+-			}
+-			servers = append(servers, s)
+-
+ 		case transport.HTTPS:
+ 			s, err := NewServerHTTPS(addr, group)
+ 			if err != nil {
+diff --git a/plugin/dnssec/dnskey.go b/plugin/dnssec/dnskey.go
+index cfe59845a..44f74aaa6 100644
+--- a/plugin/dnssec/dnskey.go
++++ b/plugin/dnssec/dnskey.go
+@@ -1,21 +1,16 @@
+ package dnssec
+ 
+ import (
+-	"context"
+ 	"crypto"
+ 	"crypto/ecdsa"
+ 	"crypto/rsa"
+-	"encoding/json"
+ 	"errors"
+ 	"os"
+ 	"path/filepath"
+-	"strings"
+ 	"time"
+ 
+ 	"github.com/coredns/coredns/request"
+ 
+-	"github.com/aws/aws-sdk-go-v2/config"
+-	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+ 	"github.com/miekg/dns"
+ 	"golang.org/x/crypto/ed25519"
+ )
+@@ -74,69 +69,6 @@ func ParseKeyFile(pubFile, privFile string) (*DNSKEY, error) {
+ 	return &DNSKEY{K: dk, D: dk.ToDS(dns.SHA256), s: nil, tag: 0}, errors.New("no private key found")
+ }
+ 
+-// ParseKeyFromAWSSecretsManager retrieves and parses a DNSSEC key pair from AWS Secrets Manager.
+-func ParseKeyFromAWSSecretsManager(secretID string) (*DNSKEY, error) {
+-	// Load the AWS SDK configuration
+-	cfg, err := config.LoadDefaultConfig(context.TODO())
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	// Create a Secrets Manager client
+-	client := secretsmanager.NewFromConfig(cfg)
+-
+-	// Retrieve the secret value
+-	input := &secretsmanager.GetSecretValueInput{
+-		SecretId: &secretID,
+-	}
+-	result, err := client.GetSecretValue(context.TODO(), input)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	// Parse the secret string into SecretKeyData
+-	var secretData SecretKeyData
+-	err = json.Unmarshal([]byte(*result.SecretString), &secretData)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	// Parse the public key
+-	rr, err := dns.NewRR(secretData.Key)
+-	if err != nil {
+-		return nil, err
+-	}
+-	dk, ok := rr.(*dns.DNSKEY)
+-	if !ok {
+-		return nil, errors.New("invalid public key format")
+-	}
+-
+-	// Parse the private key
+-	p, err := dk.ReadPrivateKey(strings.NewReader(secretData.Private), secretID)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	// Create the DNSKEY structure
+-	var s crypto.Signer
+-	var tag uint16
+-	switch key := p.(type) {
+-	case *rsa.PrivateKey:
+-		s = key
+-		tag = dk.KeyTag()
+-	case *ecdsa.PrivateKey:
+-		s = key
+-		tag = dk.KeyTag()
+-	case ed25519.PrivateKey:
+-		s = key
+-		tag = dk.KeyTag()
+-	default:
+-		return nil, errors.New("unsupported key type")
+-	}
+-
+-	return &DNSKEY{K: dk, D: dk.ToDS(dns.SHA256), s: s, tag: tag}, nil
+-}
+-
+ // getDNSKEY returns the correct DNSKEY to the client. Signatures are added when do is true.
+ func (d Dnssec) getDNSKEY(state request.Request, zone string, do bool, server string) *dns.Msg {
+ 	keys := make([]dns.RR, len(d.keys))
+diff --git a/plugin/dnssec/setup.go b/plugin/dnssec/setup.go
+index 3ab968f8b..ab0856870 100644
+--- a/plugin/dnssec/setup.go
++++ b/plugin/dnssec/setup.go
+@@ -139,19 +139,6 @@ func keyParse(c *caddy.Controller) ([]*DNSKEY, error) {
+ 			}
+ 			keys = append(keys, k)
+ 		}
+-	case "aws_secretsmanager":
+-		ks := c.RemainingArgs()
+-		if len(ks) == 0 {
+-			return nil, c.ArgErr()
+-		}
+-
+-		for _, k := range ks {
+-			k, err := ParseKeyFromAWSSecretsManager(k)
+-			if err != nil {
+-				return nil, err
+-			}
+-			keys = append(keys, k)
+-		}
+ 	}
+ 	return keys, nil
+ }
+diff --git a/plugin/trace/trace.go b/plugin/trace/trace.go
+index f3d0155b6..fd06d5afa 100644
+--- a/plugin/trace/trace.go
++++ b/plugin/trace/trace.go
+@@ -19,8 +19,6 @@ import (
+ 	_ "github.com/coredns/coredns/plugin/pkg/trace" // Plugin the trace package.
+ 	"github.com/coredns/coredns/request"
+ 
+-	"github.com/DataDog/dd-trace-go/v2/ddtrace/ext"
+-	"github.com/DataDog/dd-trace-go/v2/ddtrace/tracer"
+ 	"github.com/miekg/dns"
+ 	ot "github.com/opentracing/opentracing-go"
+ 	otext "github.com/opentracing/opentracing-go/ext"
+@@ -92,16 +90,6 @@ func (t *trace) OnStartup() error {
+ 		switch t.EndpointType {
+ 		case "zipkin":
+ 			err = t.setupZipkin()
+-		case "datadog":
+-			tracer.Start(
+-				tracer.WithAgentAddr(t.Endpoint),
+-				tracer.WithDebugMode(clog.D.Value()),
+-				tracer.WithGlobalTag(ext.SpanTypeDNS, true),
+-				tracer.WithService(t.serviceName),
+-				tracer.WithAnalyticsRate(t.datadogAnalyticsRate),
+-				tracer.WithLogger(&loggerAdapter{log}),
+-			)
+-			t.tagSet = tagByProvider["datadog"]
+ 		default:
+ 			err = fmt.Errorf("unknown endpoint type: %s", t.EndpointType)
+ 		}
+@@ -111,9 +99,6 @@ func (t *trace) OnStartup() error {
+ 
+ // OnShutdown cleans up the tracer
+ func (t *trace) OnShutdown() error {
+-	if t.EndpointType == "datadog" {
+-		tracer.Stop()
+-	}
+ 	return nil
+ }
+ 
+@@ -161,31 +146,9 @@ func (t *trace) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
+ 		}
+ 	}
+ 
+-	if t.EndpointType == "datadog" {
+-		return t.serveDNSDatadog(ctx, w, r, shouldTrace)
+-	}
+ 	return t.serveDNSZipkin(ctx, w, r, shouldTrace)
+ }
+ 
+-func (t *trace) serveDNSDatadog(ctx context.Context, w dns.ResponseWriter, r *dns.Msg, shouldTrace bool) (int, error) {
+-	if !shouldTrace {
+-		return plugin.NextOrFailure(t.Name(), t.Next, ctx, w, r)
+-	}
+-
+-	span, spanCtx := tracer.StartSpanFromContext(ctx, defaultTopLevelSpanName)
+-	defer span.Finish()
+-
+-	metadata.SetValueFunc(ctx, metaTraceIdKey, func() string { return span.Context().TraceID() })
+-
+-	req := request.Request{W: w, Req: r}
+-	rw := dnstest.NewRecorder(w)
+-	status, err := plugin.NextOrFailure(t.Name(), t.Next, spanCtx, rw, r)
+-
+-	t.setDatadogSpanTags(span, req, rw, status, err)
+-
+-	return status, err
+-}
+-
+ func (t *trace) serveDNSZipkin(ctx context.Context, w dns.ResponseWriter, r *dns.Msg, shouldTrace bool) (int, error) {
+ 	span := ot.SpanFromContext(ctx)
+ 	if !shouldTrace || span != nil {
+@@ -216,24 +179,6 @@ func (t *trace) serveDNSZipkin(ctx context.Context, w dns.ResponseWriter, r *dns
+ 	return status, err
+ }
+ 
+-// setDatadogSpanTags sets span tags using DataDog v2 API
+-func (t *trace) setDatadogSpanTags(span *tracer.Span, req request.Request, rw *dnstest.Recorder, status int, err error) {
+-	span.SetTag(t.tagSet.Name, req.Name())
+-	span.SetTag(t.tagSet.Type, req.Type())
+-	span.SetTag(t.tagSet.Proto, req.Proto())
+-	span.SetTag(t.tagSet.Remote, req.IP())
+-	rc := rw.Rcode
+-	if !plugin.ClientWrite(status) {
+-		rc = status
+-	}
+-	span.SetTag(t.tagSet.Rcode, rcode.ToString(rc))
+-	if err != nil {
+-		span.SetTag("error.message", err.Error())
+-		span.SetTag("error", true)
+-		span.SetTag("error.type", "dns_error")
+-	}
+-}
+-
+ // setZipkinSpanTags sets span tags for Zipkin/OpenTracing spans
+ func (t *trace) setZipkinSpanTags(span ot.Span, req request.Request, rw *dnstest.Recorder, status int, err error) {
+ 	span.SetTag(t.tagSet.Name, req.Name())

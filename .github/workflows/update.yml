@@ -50,6 +50,29 @@ jobs:
           rm -rf .circleci
           git commit -a -m "Deleted .circleci folder"
 
+          rm -f owners_generate.go
+          sed -i "/owners_generate.go/d" coredns.go
+          git commit -a -m "Deleted owners generation script"
+
+          sed -i "/geoip\|grpc_server\|chaos\|route53\|azure\|clouddns\|k8s_external\|kubernetes\|etcd\|grpc\|nomad/d" plugin.cfg
+          rm -rf plugin/{azure,grpc_server,chaos,route53,azure,clouddns,k8s_external,kubernetes,etcd,grpc,nomad}
+          git commit -a -m "Deleted unused plugins"
+
+          rm -rf pb
+          git commit -a -m "Deleted pb (protobuf)"
+
+          rm -f core/dnsserver/{server_grpc.go,server_grpc_test.go,server_test.go}
+          rm -f plugin/{backend.go,backend_lookup.go,backend_lookup_test.go}
+          rm -f plugin/trace/trace_test.go
+          rm -f test/{etcd_cache_test.go,etcd_test.go,grpc_test.go}
+          git commit -a -m "Deleted go files dependening on remove plugins"
+
+          git apply ../remove-bloat-fix-compile.patch
+          git commit -a -m "Removed bloat and fix compilation"
+
+          echo "Add blocklist plugin"
+          sed -i '/^forward:forward/i blocklist:github.com/relekang/coredns-blocklist' plugin.cfg
+
           mkdir -p .github/workflows
           curl --fail -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             https://raw.githubusercontent.com/litetex-oss/coredns-slim/refs/heads/master/.github/workflows/build-and-tag.yml \
