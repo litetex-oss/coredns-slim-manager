@@ -73,6 +73,15 @@ jobs:
           echo "Add blocklist plugin"
           sed -i '/^forward:forward/i blocklist:github.com/relekang/coredns-blocklist' plugin.cfg
 
+          curl --fail -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            https://raw.githubusercontent.com/litetex-oss/coredns-slim/refs/heads/master/.dockerignore \
+            > .dockerignore
+          curl --fail -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            https://raw.githubusercontent.com/litetex-oss/coredns-slim/refs/heads/master/Dockerfile \
+            > Dockerfile
+          git add -A
+          git commit -a -m "Add Dockerfile"
+
           mkdir -p .github/workflows
           curl --fail -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             https://raw.githubusercontent.com/litetex-oss/coredns-slim/refs/heads/master/.github/workflows/build-and-tag.yml \
