@@ -1,8 +1,8 @@
 diff --git a/core/dnsserver/register.go b/core/dnsserver/register.go
-index 9aa95e4ea..036dbbb2d 100644
+index 3c7610b83..611bdc44f 100644
 --- a/core/dnsserver/register.go
 +++ b/core/dnsserver/register.go
-@@ -336,13 +336,6 @@ func makeServersForGroup(addr string, group []*Config) ([]caddy.Server, error) {
+@@ -338,13 +338,6 @@ func makeServersForGroup(addr string, group []*Config) ([]caddy.Server, error) {
  			}
  			servers = append(servers, s)
  
@@ -17,7 +17,7 @@ index 9aa95e4ea..036dbbb2d 100644
  			s, err := NewServerHTTPS(addr, group)
  			if err != nil {
 diff --git a/plugin/dnssec/dnskey.go b/plugin/dnssec/dnskey.go
-index cfe59845a..44f74aaa6 100644
+index ec1cf4e9d..81b497926 100644
 --- a/plugin/dnssec/dnskey.go
 +++ b/plugin/dnssec/dnskey.go
 @@ -1,21 +1,16 @@
@@ -43,7 +43,7 @@ index cfe59845a..44f74aaa6 100644
  	"golang.org/x/crypto/ed25519"
  )
 @@ -74,69 +69,6 @@ func ParseKeyFile(pubFile, privFile string) (*DNSKEY, error) {
- 	return &DNSKEY{K: dk, D: dk.ToDS(dns.SHA256), s: nil, tag: 0}, errors.New("no private key found")
+ 	return nil, errors.New("no private key found")
  }
  
 -// ParseKeyFromAWSSecretsManager retrieves and parses a DNSSEC key pair from AWS Secrets Manager.
@@ -137,7 +137,7 @@ index 3ab968f8b..ab0856870 100644
  	return keys, nil
  }
 diff --git a/plugin/trace/trace.go b/plugin/trace/trace.go
-index f3d0155b6..fd06d5afa 100644
+index 357abf8c8..833a9bc3b 100644
 --- a/plugin/trace/trace.go
 +++ b/plugin/trace/trace.go
 @@ -19,8 +19,6 @@ import (
