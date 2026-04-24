@@ -82,7 +82,8 @@ jobs:
           git add -A
           git commit -a -m "Add Dockerfile"
 
-          mkdir -p it/{config,blocklists}
+          mkdir -p it/blocklists
+          mkdir -p it/config
           curl --fail -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             https://raw.githubusercontent.com/litetex-oss/coredns-slim/refs/heads/master/it/blocklists/blocklist.txt \
             > it/blocklists/blocklist.txt
